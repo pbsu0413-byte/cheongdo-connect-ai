@@ -294,6 +294,26 @@ mark { padding-inline: 0.12em; border-radius: 2px; background: var(--color-mark)
 }
 .error button { min-block-size: 2.4rem; margin-inline-start: 0.5rem; }
 .approved { color: var(--color-green); font-size: 1.15rem; font-weight: 700; }
+.progress {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--color-green);
+  border-radius: 8px;
+  background: var(--color-green-soft);
+  color: var(--color-ink);
+  font-weight: 600;
+}
+.review {
+  margin-block-start: 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--color-green);
+  border-radius: 8px;
+  background: var(--color-green-soft);
+  color: var(--color-body);
+}
+.review h3 { margin: 0 0 0.4rem; font-size: 0.98rem; color: var(--color-ink); }
+.review ul { margin: 0.4rem 0 0; padding-inline-start: 1.2rem; }
+.review .quote { color: var(--color-muted); }
 footer {
   padding-block: 1rem 2rem;
   border-block-start: 1px solid var(--color-rule);

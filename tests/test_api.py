@@ -7,26 +7,6 @@ from app.main import app
 client = TestClient(app)
 
 
-@pytest.fixture(autouse=True)
-def no_real_model(monkeypatch):
-    for name in (
-        "COPILOT_GITHUB_TOKEN",
-        "GH_TOKEN",
-        "GITHUB_TOKEN",
-        "AZURE_OPENAI_ENDPOINT",
-        "AZURE_OPENAI_API_KEY",
-        "AZURE_OPENAI_DEPLOYMENT_NAME",
-    ):
-        monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(main, "_last_model_status", None, raising=False)
-
-    async def fail(*_args, **_kwargs):
-        raise RuntimeError("model unavailable in tests")
-
-    monkeypatch.setattr(agents, "_run_agent", fail)
-    monkeypatch.setattr(agents, "FALLBACK_DELAY_SECONDS", 0)
-
-
 def masked_flow(text="홍길순 어르신 연락처 010-0000-0001. 혼자 거주하며 전기요금 3개월 체납. 식사를 거름."):
     response = client.post("/api/mask", json={"text": text})
     assert response.status_code == 200
