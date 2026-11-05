@@ -28,6 +28,13 @@ MAX_MEMO_CHARS = 4000
 DISCLAIMER = "시연용 가상 데이터입니다. 실제 자격 판정이 아니며, AI가 만든 결과는 담당자가 확인해야 합니다."
 KST = timezone(timedelta(hours=9))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+_last_model_status: str | None = None
+
+
+def _record_model_result(is_fallback: bool) -> None:
+    global _last_model_status
+    _last_model_status = "last_call_failed" if is_fallback else "last_call_success"
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -121,7 +128,8 @@ def _require_confirmed(masked_text: str, mask_token: str) -> None:
 
 @app.get("/api/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    model_status = _last_model_status or "not_checked"
+    return {"status": "ok", "model_status": model_status}
 
 
 @app.get("/api/samples")
@@ -158,6 +166,7 @@ async def match(request: MatchRequest, http_request: Request) -> dict:
     started = time.monotonic()
     async with _model_slot():
         result = await agents.match_schemes(request.masked_text)
+    _record_model_result(result["is_fallback"])
     logger.info("match done fallback=%s candidates=%d ms=%d", result["is_fallback"], len(result["candidates"]), (time.monotonic() - started) * 1000)
     return {
         **result,
@@ -203,6 +212,7 @@ async def draft_stream(request: DraftRequest, http_request: Request) -> Streamin
                         "elapsed_ms": int((time.monotonic() - started) * 1000),
                         "disclaimer": DISCLAIMER,
                     }
+                    _record_model_result(item["is_fallback"])
                     logger.info("draft stream done fallback=%s ms=%d", item["is_fallback"], payload["elapsed_ms"])
                     yield _sse("done", payload)
         finally:
@@ -221,6 +231,7 @@ async def review(request: ReviewRequest, http_request: Request) -> dict:
     _check_rate_limit(http_request)
     async with _model_slot():
         result = await agents.review_draft(request.masked_text, request.scheme_id, request.draft_text)
+    _record_model_result(result["is_fallback"])
     return {**result, "ai_generated": not result["is_fallback"], "disclaimer": DISCLAIMER}
 
 
@@ -233,6 +244,7 @@ async def draft(request: DraftRequest, http_request: Request) -> dict:
     started = time.monotonic()
     async with _model_slot():
         result = await agents.draft_application(request.masked_text, request.scheme_id)
+    _record_model_result(result["is_fallback"])
     logger.info("draft done fallback=%s ms=%d", result["is_fallback"], (time.monotonic() - started) * 1000)
     return {
         **result,

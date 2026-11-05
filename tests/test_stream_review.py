@@ -95,3 +95,42 @@ def test_review_uses_model_issues(monkeypatch):
     ).json()
     assert response["is_fallback"] is False
     assert response["issues"] == [{"text": "메모에 없는 금액이 있습니다.", "quote": "50만 원"}]
+
+
+def health_status():
+    return client.get("/api/health").json()["model_status"]
+
+
+def test_draft_stream_updates_model_status(monkeypatch):
+    async def fake_stream(*_args, **_kwargs):
+        yield "초안"
+
+    data = masked_flow()
+    body = {"masked_text": data["masked_text"], "mask_token": data["mask_token"], "scheme_id": "S-002"}
+    assert health_status() == "not_checked"
+
+    client.post("/api/draft/stream", json=body)
+    assert health_status() == "last_call_failed"
+
+    monkeypatch.setattr(agents, "_stream_agent", fake_stream)
+    client.post("/api/draft/stream", json=body)
+    assert health_status() == "last_call_success"
+
+
+def test_review_updates_model_status(monkeypatch):
+    data = masked_flow()
+    body = {
+        "masked_text": data["masked_text"],
+        "mask_token": data["mask_token"],
+        "scheme_id": "S-002",
+        "draft_text": "초안",
+    }
+    client.post("/api/review", json=body)
+    assert health_status() == "last_call_failed"
+
+    async def model(*_args, **_kwargs):
+        return '{"issues":[]}'
+
+    monkeypatch.setattr(agents, "_run_agent", model)
+    client.post("/api/review", json=body)
+    assert health_status() == "last_call_success"

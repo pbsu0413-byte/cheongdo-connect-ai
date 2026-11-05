@@ -81,11 +81,19 @@ async def _run_json(instructions: str, prompt: str, use_lookup_tool: bool, requi
 
 
 def _validate_candidates(raw: dict[str, Any]) -> list[dict[str, str]]:
+    raw_candidates = raw.get("candidates")
+    if not isinstance(raw_candidates, list):
+        raise ValueError("후보 목록 형식이 올바르지 않습니다.")
+
     known = scheme_by_id()
     candidates: list[dict[str, str]] = []
     seen: set[str] = set()
-    for item in raw.get("candidates", []):
-        scheme_id = str(item.get("scheme_id", ""))
+    for item in raw_candidates:
+        if not isinstance(item, dict) or not all(
+            isinstance(item.get(key), str) for key in ("scheme_id", "reason", "evidence")
+        ):
+            raise ValueError("후보 항목 형식이 올바르지 않습니다.")
+        scheme_id = item["scheme_id"]
         if scheme_id not in known or scheme_id in seen:
             continue
         seen.add(scheme_id)
@@ -94,8 +102,8 @@ def _validate_candidates(raw: dict[str, Any]) -> list[dict[str, str]]:
                 "scheme_id": scheme_id,
                 "name": known[scheme_id]["name"],
                 "category": known[scheme_id]["category"],
-                "reason": str(item.get("reason", ""))[:300],
-                "evidence": str(item.get("evidence", ""))[:300],
+                "reason": item["reason"][:300],
+                "evidence": item["evidence"][:300],
             }
         )
     return candidates

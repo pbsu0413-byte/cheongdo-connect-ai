@@ -9,6 +9,16 @@ def no_real_model(monkeypatch):
     from app import main
 
     main._recent_calls.clear()
+    monkeypatch.setattr(main, "_last_model_status", None)
+    for name in (
+        "COPILOT_GITHUB_TOKEN",
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "AZURE_OPENAI_ENDPOINT",
+        "AZURE_OPENAI_API_KEY",
+        "AZURE_OPENAI_DEPLOYMENT_NAME",
+    ):
+        monkeypatch.delenv(name, raising=False)
 
     async def fail(*_args, **_kwargs):
         raise RuntimeError("model unavailable in tests")

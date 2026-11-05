@@ -10,21 +10,30 @@
 <body>
   <a class="skip" href="#main">본문으로 건너뛰기</a>
   <div class="banner" role="note">
-    <strong>시연용 가상 데이터만 입력하세요.</strong> 실제 개인정보를 입력하지 마세요. 로그인 없이 바로 체험할 수 있습니다.
+    <div class="banner__inner">
+      <strong>시연용 가상 데이터입니다.</strong>
+      <span>실제 개인정보를 입력하지 마세요.</span>
+    </div>
   </div>
 
-  <header class="hero">
-    <h1>🍊 청도 돌봄 도우미</h1>
-    <p>상담 메모의 개인정보를 <b>AI에 보내기 전에 먼저 가리고</b>, 담당자가 확인한 뒤에만 제도 후보와 신청서 초안을 만듭니다. 최종 결정은 사람이 합니다.</p>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="brand">청도 돌봄 도우미</p>
+      <p id="modelStatus" class="model-status" role="status" aria-live="polite" data-state="checking">상태 확인 중</p>
+    </div>
+    <div class="intro">
+      <h1>상담 메모를 함께 검토합니다</h1>
+      <p>개인정보를 가린 결과를 확인한 뒤, 제도 후보와 신청서 초안을 살펴보고 승인합니다.</p>
+    </div>
   </header>
 
-  <nav aria-label="진행 단계">
+  <nav class="progress-nav" aria-label="진행 단계">
     <ol class="stepper" id="stepper">
-      <li data-step="1" class="active"><span>1</span>입력</li>
-      <li data-step="2"><span>2</span>마스킹 확인</li>
-      <li data-step="3"><span>3</span>제도 후보</li>
-      <li data-step="4"><span>4</span>서류 초안</li>
-      <li data-step="5"><span>5</span>승인</li>
+      <li data-step="1" class="active" aria-current="step"><span class="stepper__number">1</span><span class="stepper__label">입력</span></li>
+      <li data-step="2"><span class="stepper__number">2</span><span class="stepper__label">마스킹 확인</span></li>
+      <li data-step="3"><span class="stepper__number">3</span><span class="stepper__label">제도 후보</span></li>
+      <li data-step="4"><span class="stepper__number">4</span><span class="stepper__label">신청서 초안</span></li>
+      <li data-step="5"><span class="stepper__number">5</span><span class="stepper__label">승인</span></li>
     </ol>
   </nav>
 
@@ -33,25 +42,37 @@
     <div id="status" class="sr-only" aria-live="polite"></div>
     <p id="progress" class="progress" hidden></p>
 
-    <section id="step1" class="card" aria-labelledby="h1">
-      <h2 id="h1">1. 상담 메모 입력</h2>
-      <p class="hint">원클릭 시연: 아래 버튼을 누르면 샘플 메모로 바로 마스킹까지 진행합니다.</p>
-      <div class="demo-buttons" id="demoButtons"></div>
-      <label for="memo">상담 메모 (가상 데이터)</label>
-      <textarea id="memo" rows="8" maxlength="4000" placeholder="메모를 입력하거나 샘플을 선택해 주세요."></textarea>
-      <div class="row">
-        <label for="sampleSelect" class="inline">다른 샘플</label>
-        <select id="sampleSelect"><option value="">샘플 선택…</option></select>
-        <button id="maskBtn" class="primary">마스킹하기</button>
+    <section id="step1" class="panel" aria-labelledby="h1">
+      <div class="panel__heading">
+        <h2 id="h1" tabindex="-1">상담 메모 입력</h2>
+        <p class="hint">샘플을 고르거나 가상 메모를 입력해 시작하세요.</p>
+      </div>
+      <div class="input-layout">
+        <div class="memo-entry">
+          <label for="memo">상담 메모</label>
+          <textarea id="memo" rows="8" maxlength="4000" placeholder="가상 메모를 입력해 주세요."></textarea>
+          <div class="row">
+            <label for="sampleSelect" class="inline">샘플 선택</label>
+            <select id="sampleSelect"><option value="">샘플 선택…</option></select>
+            <button id="maskBtn" class="primary">개인정보 가리기</button>
+          </div>
+        </div>
+        <div class="sample-area">
+          <h3>샘플로 빠르게 시작</h3>
+          <p class="hint">샘플을 누르면 마스킹 결과로 이동합니다.</p>
+          <div class="demo-buttons" id="demoButtons"></div>
+        </div>
       </div>
     </section>
 
-    <section id="step2" class="card" hidden aria-labelledby="h2">
-      <h2 id="h2">2. 마스킹 결과 확인</h2>
-      <p class="notice">AI에는 <b>오른쪽 마스킹된 내용만</b> 전달됩니다. 확인하기 전에는 AI를 호출하지 않습니다.</p>
+    <section id="step2" class="panel" hidden aria-labelledby="h2">
+      <div class="panel__heading">
+        <h2 id="h2" tabindex="-1">마스킹 결과 확인</h2>
+        <p class="notice">확인 후에만 마스킹된 메모가 다음 단계로 전달됩니다.</p>
+      </div>
       <div class="compare">
-        <div><h3>원문 (이 화면에서만 표시)</h3><pre id="original"></pre></div>
-        <div><h3>마스킹 결과 (AI 전달 내용)</h3><pre id="masked"></pre></div>
+        <div class="compare__item"><h3>입력한 메모</h3><pre id="original"></pre></div>
+        <div class="compare__item"><h3>가려진 내용</h3><pre id="masked"></pre></div>
       </div>
       <p id="counts" class="counts"></p>
       <p id="warnings" class="warn"></p>
@@ -62,17 +83,23 @@
       </div>
     </section>
 
-    <section id="step3" class="card" hidden aria-labelledby="h3">
-      <h2 id="h3">3. 제도 후보</h2>
+    <section id="step3" class="panel" hidden aria-labelledby="h3">
+      <div class="panel__heading">
+        <h2 id="h3" tabindex="-1">제도 후보</h2>
+        <p class="hint">후보는 참고 정보이며, 자격 여부를 확정하지 않습니다.</p>
+      </div>
       <p id="matchBadges" class="badges"></p>
       <div id="candidates"></div>
       <div class="row"><button id="restart3">처음으로</button></div>
     </section>
 
-    <section id="step4" class="card" hidden aria-labelledby="h4">
-      <h2 id="h4">4. 신청서 초안</h2>
+    <section id="step4" class="panel" hidden aria-labelledby="h4">
+      <div class="panel__heading">
+        <h2 id="h4" tabindex="-1">신청서 초안</h2>
+        <p class="hint">내용을 검토하고 필요한 부분을 직접 수정할 수 있습니다.</p>
+      </div>
       <p id="draftBadges" class="badges"></p>
-      <label for="draft">초안 (직접 수정할 수 있습니다)</label>
+      <label for="draft">초안 내용</label>
       <textarea id="draft" rows="12"></textarea>
       <div id="review" class="review" hidden aria-live="polite"></div>
       <p class="hint">담당자가 검토하기 전에는 확정되지 않습니다.</p>
@@ -82,16 +109,18 @@
       </div>
     </section>
 
-    <section id="step5" class="card" hidden aria-labelledby="h5">
-      <h2 id="h5">5. 승인 완료</h2>
+    <section id="step5" class="panel" hidden aria-labelledby="h5">
+      <div class="panel__heading">
+        <h2 id="h5" tabindex="-1">승인 완료</h2>
+      </div>
       <p class="approved" id="approvedMsg"></p>
-      <p class="hint">시연용 가상 데이터이며 실제로 접수되거나 제출되지 않았습니다.</p>
+      <p class="hint">시연 결과이며 실제로 접수되거나 제출되지 않았습니다.</p>
       <div class="row"><button id="restart5" class="primary">처음으로</button></div>
     </section>
   </main>
 
   <footer>
-    <p>모든 AI 결과는 <b>AI 생성</b>이며 담당자가 확인해야 합니다. 시연용 가상 데이터이고 실제 자격 판정이 아닙니다.</p>
+    <p>AI 생성 결과와 규칙 기반 대체 결과는 담당자가 확인해야 합니다. 시연용 가상 데이터이며 실제 자격 판정이 아닙니다.</p>
   </footer>
   <script src="/static/app.js"></script>
 </body>
