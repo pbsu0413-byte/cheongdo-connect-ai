@@ -19,6 +19,9 @@ NOT_NAMES = {
 RRN_RE = re.compile(r"(?<!\d)\d{6}[-\s]?[1-4]\d{6}(?!\d)")
 MOBILE_RE = re.compile(r"(?<!\d)01[016789][-\s.]?\d{3,4}[-\s.]?\d{4}(?!\d)")
 LANDLINE_RE = re.compile(r"(?<!\d)0(?:2|[3-6]\d)[-\s.]?\d{3,4}[-\s.]?\d{4}(?!\d)")
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+ACCOUNT_RE = re.compile(r"(?<!\d)\d{3,6}-\d{2,6}-\d{3,8}(?!\d)")
+DATE_RE = re.compile(r"(?<!\d)(?:(?:19|20)\d{2}[.\-/]\s?\d{1,2}[.\-/]\s?\d{1,2}|\d{4}년\s?\d{1,2}월\s?\d{1,2}일)")
 ADDRESS_RE = re.compile(
     r"(?:[가-힣]{1,6}(?:특별시|광역시|특별자치시|특별자치도|시|군|구|읍|면|동|리|로|길)\s*){1,6}"
     r"\d{1,5}(?:-\d{1,4})?(?:번지|호)?"
@@ -26,8 +29,14 @@ ADDRESS_RE = re.compile(
 NAME_BY_HONORIFIC_RE = re.compile(rf"(?<![가-힣])([가-힣]{{2,4}})(?=\s*(?:{HONORIFICS})(?![가-힣]))")
 NAME_BY_LABEL_RE = re.compile(r"(?:성명|이름|보호자|대상자|신청인)\s*[:：]?\s*([가-힣]{2,4})(?![가-힣])")
 
-LABELS = {"phone": "전화", "rrn": "주민번호", "address": "주소", "name": "이름"}
-KIND_ORDER = ["name", "phone", "rrn", "address"]
+# 가리지 않는 민감 정보는 감지해 경고만 한다(전송 전에 담당자가 직접 확인하도록).
+SENSITIVE_KEYWORDS = {
+    "건강 정보": ("수술", "질환", "진단", "치매", "당뇨", "암 ", "우울", "투석", "입원", "약 복용", "장애"),
+    "소득·재산 정보": ("소득", "월급", "연금", "기초생활", "수급", "재산", "대출", "빚", "체납"),
+}
+
+LABELS = {"phone": "전화", "rrn": "주민번호", "address": "주소", "name": "이름", "email": "이메일", "account": "계좌", "date": "날짜"}
+KIND_ORDER = ["name", "phone", "rrn", "address", "email", "account", "date"]
 
 
 @dataclass
@@ -77,6 +86,9 @@ def mask_personal_data(text: str) -> MaskResult:
         (RRN_RE, "rrn"),
         (MOBILE_RE, "phone"),
         (LANDLINE_RE, "phone"),
+        (EMAIL_RE, "email"),
+        (ACCOUNT_RE, "account"),
+        (DATE_RE, "date"),
         (ADDRESS_RE, "address"),
     ):
         masked = pattern.sub(lambda m, k=kind: placeholders.get(k, m.group(0)), masked)
@@ -88,4 +100,7 @@ def mask_personal_data(text: str) -> MaskResult:
     warnings: list[str] = []
     if counts.get("rrn"):
         warnings.append("주민등록번호 형태가 발견되어 가렸습니다. 실제 개인정보는 입력하지 마세요.")
+    found = [label for label, words in SENSITIVE_KEYWORDS.items() if any(word in masked for word in words)]
+    if found:
+        warnings.append(f"{', '.join(found)}으로 보이는 표현은 가려지지 않고 AI에 전달됩니다. 전송 전에 꼭 확인하세요.")
     return MaskResult(masked_text=masked, counts=counts, warnings=warnings)

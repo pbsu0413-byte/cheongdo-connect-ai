@@ -1,10 +1,19 @@
 (() => {
   const $ = (id) => document.getElementById(id);
-  const KIND_LABELS = { name: "이름", phone: "전화", rrn: "주민번호", address: "주소" };
+  const KIND_LABELS = { name: "이름", phone: "전화", rrn: "주민번호", address: "주소", email: "이메일", account: "계좌", date: "날짜" };
   const state = { original: "", masked: "", maskToken: "", schemeId: "", draftToken: "", samples: [], lastAction: null };
 
+  // 화면을 이동하면 진행 중이던 요청의 늦은 응답이 화면을 바꾸지 않도록 취소한다.
+  let epoch = 0;
+  let controller = null;
+  function cancelPending() {
+    epoch += 1;
+    if (controller) { controller.abort(); controller = null; }
+    $("progress").hidden = true;
+  }
+
   const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const highlight = (s) => escapeHtml(s).replace(/\[(이름|전화|주민번호|주소)[A-Z]+\]/g, "<mark>$&</mark>");
+  const highlight = (s) => escapeHtml(s).replace(/\[(이름|전화|주민번호|주소|이메일|계좌|날짜)[A-Z]+\]/g, "<mark>$&</mark>");
 
   function announce(message) { $("status").textContent = message; }
 
@@ -43,6 +52,8 @@
       if (i === step) li.setAttribute("aria-current", "step"); else li.removeAttribute("aria-current");
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
+    const heading = $("h" + step);
+    if (heading) { heading.setAttribute("tabindex", "-1"); heading.focus({ preventScroll: true }); }
   }
 
   function setBusy(button, busy, label) {
@@ -55,9 +66,11 @@
     hideError();
     state.lastAction = () => runMask(text);
     const btn = $("maskBtn");
+    const mine = epoch;
     setBusy(btn, true, "마스킹 중…");
     try {
       const data = await api("/api/mask", { text });
+      if (mine !== epoch) return;
       state.original = text;
       state.masked = data.masked_text;
       state.maskToken = data.mask_token;
@@ -99,18 +112,20 @@
     const timer = setInterval(render, 500);
     return {
       set(text) { message = text; render(); },
-      stop() { clearInterval(timer); el.hidden = true; },
+      stop(hide = true) { clearInterval(timer); if (hide) el.hidden = true; },
     };
   }
 
   async function runMatch() {
     hideError();
     const btn = $("confirmBtn");
+    const mine = epoch;
     setBusy(btn, true, "후보 찾는 중…");
     announce("제도 후보를 찾고 있습니다.");
     const progress = startProgress("Copilot 에이전트가 제도 목록 도구를 조회하며 후보를 찾는 중입니다");
     try {
       const data = await api("/api/match", { masked_text: state.masked, mask_token: state.maskToken });
+      if (mine !== epoch) return;
       badges($("matchBadges"), data);
       const box = $("candidates");
       box.innerHTML = "";
@@ -135,7 +150,7 @@
     } catch (e) {
       showError(e.message, runMatch);
     } finally {
-      progress.stop();
+      progress.stop(mine === epoch);
       setBusy(btn, false);
     }
   }
@@ -151,23 +166,30 @@
   }
 
   async function runReview() {
+    const mine = epoch;
     const box = $("review");
     box.hidden = false;
     box.innerHTML = "<h3>검토 에이전트 점검</h3><p>초안을 메모와 대조해 점검하는 중입니다…</p>";
     try {
       const data = await api("/api/review", { masked_text: state.masked, mask_token: state.maskToken, scheme_id: state.schemeId, draft_text: $("draft").value });
+      if (mine !== epoch) return;
       const label = data.is_fallback ? "규칙 기반 점검 (AI 미연결)" : "AI 점검 · " + escapeHtml(data.engine);
       const body = data.issues.length
         ? "<ul>" + data.issues.map((i) => `<li>${escapeHtml(i.text)}${i.quote ? ` <span class="quote">“${escapeHtml(i.quote)}”</span>` : ""}</li>`).join("") + "</ul>"
         : "<p>점검에서 문제를 찾지 못했습니다. 그래도 승인 전에 담당자가 직접 확인해 주세요.</p>";
       box.innerHTML = `<h3>검토 에이전트 점검 <span class="badge ${data.is_fallback ? "fallback" : "ai"}">${label}</span></h3>${body}`;
     } catch (e) {
+      if (mine !== epoch) return;
       box.innerHTML = "<h3>검토 에이전트 점검</h3><p>점검을 건너뛰었습니다. 담당자가 직접 확인해 주세요.</p>";
     }
   }
 
   async function runDraft(schemeId, button) {
     hideError();
+    cancelPending();
+    const mine = epoch;
+    controller = new AbortController();
+    const { signal } = controller;
     setBusy(button, true, "초안 작성 중…");
     announce("신청서 초안을 작성하고 있습니다.");
     const draft = $("draft");
@@ -185,6 +207,7 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ masked_text: state.masked, mask_token: state.maskToken, scheme_id: schemeId }),
+        signal,
       });
       if (!response.ok) {
         let message = "일시적인 문제가 발생했습니다. 다시 시도해 주세요.";
@@ -220,10 +243,11 @@
       announce("초안이 표시되었습니다. 검토 후 승인해 주세요.");
       runReview();
     } catch (e) {
+      if (mine !== epoch || e.name === "AbortError") return;
       goto(3);
       showError(e.message, () => runDraft(schemeId, button));
     } finally {
-      progress.stop();
+      progress.stop(mine === epoch);
       draft.readOnly = false;
       setBusy(button, false);
     }
@@ -246,6 +270,7 @@
   }
 
   function restart() {
+    cancelPending();
     hideError();
     Object.assign(state, { original: "", masked: "", maskToken: "", schemeId: "", draftToken: "" });
     $("memo").value = "";
@@ -282,10 +307,10 @@
     if (!text) { showError("메모를 입력하거나 샘플을 선택해 주세요."); return; }
     runMask(text);
   });
-  $("backBtn").addEventListener("click", () => { hideError(); goto(1); });
+  $("backBtn").addEventListener("click", () => { cancelPending(); hideError(); goto(1); });
   $("confirmBtn").addEventListener("click", runMatch);
   $("restart3").addEventListener("click", restart);
-  $("backToCandidates").addEventListener("click", () => { hideError(); goto(3); });
+  $("backToCandidates").addEventListener("click", () => { cancelPending(); hideError(); goto(3); });
   $("approveBtn").addEventListener("click", runApprove);
   $("restart5").addEventListener("click", restart);
   init();

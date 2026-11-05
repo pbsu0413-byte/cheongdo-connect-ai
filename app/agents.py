@@ -63,6 +63,23 @@ def _extract_json(text: str) -> dict[str, Any]:
     return json.loads(match.group(0))
 
 
+async def _run_json(instructions: str, prompt: str, use_lookup_tool: bool, required_list_key: str) -> dict[str, Any]:
+    """JSON 스키마(필수 목록 키)가 맞지 않으면 한 번만 형식을 다시 요청한다."""
+    last_error: Exception | None = None
+    for attempt in range(2):
+        retry_note = "" if attempt == 0 else "\n\n이전 응답이 요구한 JSON 형식이 아니었습니다. 설명 없이 JSON 한 개만 출력하세요."
+        text = await _run_agent(instructions, prompt + retry_note, use_lookup_tool)
+        try:
+            data = _extract_json(text)
+            if not isinstance(data.get(required_list_key), list):
+                raise ValueError(f"'{required_list_key}' 목록이 없습니다.")
+            return data
+        except ValueError as exc:
+            last_error = exc
+            logger.warning("모델 출력 형식 불일치(시도 %d): %s", attempt + 1, exc)
+    raise last_error or ValueError("모델 출력 형식 불일치")
+
+
 def _validate_candidates(raw: dict[str, Any]) -> list[dict[str, str]]:
     known = scheme_by_id()
     candidates: list[dict[str, str]] = []
@@ -182,8 +199,8 @@ async def match_schemes(masked_text: str) -> dict[str, Any]:
         f"<memo>\n{masked_text}\n</memo>"
     )
     try:
-        text = await _run_agent(MATCHING_INSTRUCTIONS, prompt, use_lookup_tool=True)
-        candidates = _validate_candidates(_extract_json(text))
+        data = await _run_json(MATCHING_INSTRUCTIONS, prompt, use_lookup_tool=True, required_list_key="candidates")
+        candidates = _validate_candidates(data)
         return {"candidates": candidates, "is_fallback": False, "engine": "GitHub Copilot SDK + Microsoft Agent Framework"}
     except Exception as exc:  # 어떤 실패도 화면 오류로 번지지 않게 한다.
         logger.warning("매칭 에이전트 호출 실패, 대체 결과 사용: %s", type(exc).__name__)
@@ -277,8 +294,8 @@ async def review_draft(masked_text: str, scheme_id: str, draft_text: str) -> dic
         f"<draft>\n{draft_text}\n</draft>"
     )
     try:
-        text = await _run_agent(REVIEW_INSTRUCTIONS, prompt, use_lookup_tool=False)
-        raw = _extract_json(text).get("issues", [])
+        data = await _run_json(REVIEW_INSTRUCTIONS, prompt, use_lookup_tool=False, required_list_key="issues")
+        raw = data["issues"]
         issues = [
             {"text": str(item.get("text", ""))[:300], "quote": str(item.get("quote", ""))[:200]}
             for item in raw
