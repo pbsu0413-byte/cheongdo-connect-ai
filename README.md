@@ -5,7 +5,7 @@
 > 이 앱은 해커톤 데모입니다. 제도 데이터와 샘플 메모는 모두 **가상**이며, 실제 자격 판정이나 실제 개인정보 처리를 하지 않습니다.
 
 - 제품 요구사항: [PRD.md](./PRD.md) · 기술 요구사항: [TRD.md](./TRD.md)
-- 배포 URL: _배포 후 이 줄에 입력_
+- 배포 URL: https://cheongdo-care-pbs.azurewebsites.net (Azure App Service, Linux, Python 3.12, 일본 동부)
 
 ## 시연 순서 (약 3분)
 
@@ -61,13 +61,13 @@ Copilot SDK의 런타임(약 120MB)은 Python 패키지에 포함되어 있지 �
 
 ## 배포 (Azure)
 
-Azure 기본 도메인(`*.azurewebsites.net` 등)에 배포합니다. App Service(Linux, Python)의 시작 명령:
+Azure 기본 도메인(`*.azurewebsites.net`)에 App Service(Linux, Python 3.12)로 배포합니다. 현재 배포는 `az webapp up`으로 만들었고, 시작 명령은 다음과 같습니다.
 
 ```bash
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-앱 설정에 위 환경 변수를 등록하고, `/api/health`가 HTTP 200을 반환하는지 확인합니다.
+앱 설정(환경 변수)으로 `COPILOT_GITHUB_TOKEN`, `SIGNING_KEY`, `WEBSITES_PORT=8000`, `COPILOT_CLI_EXTRACT_DIR=/home/copilot-cli`를 주입했고, `/api/health`가 HTTP 200을 반환하는지 확인합니다. Always On을 켜 두었습니다. Copilot 런타임은 시작할 때 `/home/copilot-cli`로 내려받으며(배포 환경에서 약 30초 소요 확인), 이후 호출은 같은 캐시를 사용합니다.
 
 ## 알려진 한계
 

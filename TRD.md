@@ -33,7 +33,7 @@
 | CD-002 | 앱은 Azure 기본 도메인(`*.azurewebsites.net`, `*.azurecontainerapps.io`, `*.azurestaticapps.net`)에 배포해야 한다 | 대회 제출 안내, 확인 | 배포 대상 |
 | CD-003 | 로그인 없이 핵심 기능을 사용할 수 있어야 한다 | 대회 제출 안내, 확인 | 인증 없음 |
 | CD-004 | 저장소는 공개이며 비밀 정보를 포함하지 않아야 한다 | 대회 제출 안내, 확인 | 환경변수 사용 |
-| CD-005 | Copilot SDK의 인증·실행 방식 | 로컬 확인: 런타임은 첫 사용 때 GitHub Releases에서 내려받아 캐시된다. 호출에는 `github_pat_` 토큰(계정 권한 `Copilot Requests`)이 필요하고, 사용자 정의 도구는 별도 권한 승인이 필요하다. Azure 환경은 미확인 (Q-003) | 배포 환경에서 GitHub로 나가는 네트워크와 쓰기 가능한 캐시 경로가 필요함 |
+| CD-005 | Copilot SDK의 인증·실행 방식 | 로컬·Azure에서 확인(2026-11-05): 런타임은 첫 사용 때 GitHub Releases에서 내려받아 캐시된다(Azure에서 약 30초). 호출에는 `github_pat_` 토큰(계정 권한 `Copilot Requests`)이 필요하고, 사용자 정의 도구는 별도 권한 승인이 필요하다. 토큰은 앱 설정으로 주입한다. 데모 서버에 쓸 토큰의 종류·계정 허용 여부는 미확인 (Q-003) | 배포 환경에서 GitHub로 나가는 네트워크와 쓰기 가능한 캐시 경로(`COPILOT_CLI_EXTRACT_DIR`)가 필요함 |
 
 ### Coverage disposition
 
@@ -168,7 +168,7 @@
 | FR-003 | TR-F-004, TR-D-001, TR-Q-003 | Covered |
 | FR-004, FR-005 | TR-F-005 | Covered |
 | FR-006 | TR-O-001 | Covered |
-| NFR-001 | CD-001, TR-F-004, TR-F-005 | Partial: 로컬에서 Copilot SDK 호출 성공, Azure 환경 미검증 (Q-003) |
+| NFR-001 | CD-001, TR-F-004, TR-F-005 | Covered: 로컬과 Azure에서 Copilot SDK 호출 성공 확인, 토큰 허용 범위는 Q-003 |
 | NFR-002 | TR-F-002, TR-Q-001 | Covered |
 | NFR-003 | TR-Q-002 | Covered |
 | NFR-004 | TR-Q-004 | Covered |
@@ -187,7 +187,7 @@
 | ID | 항목 | 영향 | 차단 여부 | 다음 행동 |
 | -- | ---- | ---- | --------- | --------- |
 | Q-001 | 문서·코드 작성에 사용할 수 있는 도구 범위 확인 | 제출 자격 | 예 | 운영진 확인 |
-| Q-003 | Copilot SDK를 Azure에서 인증·실행하는 방법. 로컬에서는 토큰으로 매칭·초안 호출과 도구 호출 성공(2026-11-05 확인), Azure 환경은 미검증이며 데모 서버에 쓸 토큰의 종류·계정 허용 여부도 미확인 | 필수 기술 평가 | 예 | 배포 후 확인, 운영진 문의 |
+| Q-003 | 데모 서버에 쓰는 Copilot 토큰(개인 계정 fine-grained PAT)이 대회에서 허용되는지. Azure에서의 인증·실행과 호출 성공은 2026-11-05 확인 | 필수 기술 평가 | 아니오 | 운영진 문의 |
 | Q-004 | 성능 목표와 측정 조건 | 검증 근거 | 아니오 | 미정 |
 
 ### Readiness assessment
