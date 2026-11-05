@@ -24,6 +24,7 @@ MAX_MEMO_CHARS = 4000
 DISCLAIMER = "시연용 가상 데이터입니다. 실제 자격 판정이 아니며, AI가 만든 결과는 담당자가 확인해야 합니다."
 KST = timezone(timedelta(hours=9))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+_last_model_status: str | None = None
 
 app = FastAPI(title="청도 돌봄 도우미", docs_url=None, redoc_url=None)
 
@@ -74,7 +75,8 @@ def _require_confirmed(masked_text: str, mask_token: str) -> None:
 
 @app.get("/api/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    model_status = _last_model_status or "not_checked"
+    return {"status": "ok", "model_status": model_status}
 
 
 @app.get("/api/samples")
@@ -109,6 +111,8 @@ async def match(request: MatchRequest) -> dict:
     _require_confirmed(request.masked_text, request.mask_token)
     started = time.monotonic()
     result = await agents.match_schemes(request.masked_text)
+    global _last_model_status
+    _last_model_status = "last_call_failed" if result["is_fallback"] else "last_call_success"
     logger.info("match done fallback=%s candidates=%d ms=%d", result["is_fallback"], len(result["candidates"]), (time.monotonic() - started) * 1000)
     return {**result, "ai_generated": not result["is_fallback"], "disclaimer": DISCLAIMER}
 
@@ -120,6 +124,8 @@ async def draft(request: DraftRequest) -> dict:
         raise _error(400, "unknown_scheme", "존재하지 않는 제도입니다. 후보 목록에서 선택해 주세요.")
     started = time.monotonic()
     result = await agents.draft_application(request.masked_text, request.scheme_id)
+    global _last_model_status
+    _last_model_status = "last_call_failed" if result["is_fallback"] else "last_call_success"
     logger.info("draft done fallback=%s ms=%d", result["is_fallback"], (time.monotonic() - started) * 1000)
     return {
         **result,

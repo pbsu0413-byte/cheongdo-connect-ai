@@ -1,12 +1,30 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const KIND_LABELS = { name: "이름", phone: "전화", rrn: "주민번호", address: "주소" };
+  const MODEL_STATUS_LABELS = {
+    not_checked: "모델 연결 여부 확인 전",
+    last_call_success: "최근 모델 호출 성공",
+    last_call_failed: "최근 처리 대체됨, 규칙 기반 결과",
+  };
   const state = { original: "", masked: "", maskToken: "", schemeId: "", draftToken: "", samples: [], lastAction: null };
 
   const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const highlight = (s) => escapeHtml(s).replace(/\[(이름|전화|주민번호|주소)[A-Z]+\]/g, "<mark>$&</mark>");
 
   function announce(message) { $("status").textContent = message; }
+
+  async function refreshModelStatus() {
+    const status = $("modelStatus");
+    try {
+      const data = await api("/api/health");
+      const label = MODEL_STATUS_LABELS[data.model_status];
+      status.dataset.state = label ? data.model_status : "unavailable";
+      status.textContent = label || "상태 확인 불가";
+    } catch {
+      status.dataset.state = "unavailable";
+      status.textContent = "상태 확인 불가";
+    }
+  }
 
   function showError(message, retry) {
     const box = $("error");
@@ -42,7 +60,9 @@
       li.classList.toggle("done", i < step);
       if (i === step) li.setAttribute("aria-current", "step"); else li.removeAttribute("aria-current");
     }
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    window.scrollTo({ top: 0, behavior });
+    $("h" + step).focus({ preventScroll: true });
   }
 
   function setBusy(button, busy, label) {
@@ -79,12 +99,12 @@
   function badges(target, data) {
     const list = [];
     if (data.is_fallback) {
-      list.push('<span class="badge fallback">AI 미연결 · 규칙 기반 대체 결과 (AI가 만든 결과가 아님)</span>');
+      list.push('<span class="badge fallback">AI 미연결 / 규칙 기반 대체 결과 (AI 생성 아님)</span>');
     } else {
-      list.push('<span class="badge ai">AI 생성</span>');
+      list.push('<span class="badge ai">AI 생성 결과</span>');
       list.push(`<span class="badge">${escapeHtml(data.engine)}</span>`);
     }
-    list.push('<span class="badge">시연용 가상 데이터 · 자격 판정 아님</span>');
+    list.push('<span class="badge">시연용 가상 데이터 / 자격 판정 아님</span>');
     target.innerHTML = list.join("");
   }
 
@@ -95,6 +115,7 @@
     announce("제도 후보를 찾고 있습니다.");
     try {
       const data = await api("/api/match", { masked_text: state.masked, mask_token: state.maskToken });
+      void refreshModelStatus();
       badges($("matchBadges"), data);
       const box = $("candidates");
       box.innerHTML = "";
@@ -129,6 +150,7 @@
     announce("신청서 초안을 작성하고 있습니다.");
     try {
       const data = await api("/api/draft", { masked_text: state.masked, mask_token: state.maskToken, scheme_id: schemeId });
+      void refreshModelStatus();
       state.schemeId = schemeId;
       state.draftToken = data.draft_token;
       badges($("draftBadges"), data);
@@ -166,12 +188,13 @@
   }
 
   async function init() {
+    void refreshModelStatus();
     try {
       const data = await api("/api/samples");
       state.samples = data.memos;
       data.memos.slice(0, 3).forEach((m) => {
         const b = document.createElement("button");
-        b.textContent = `▶ ${m.title}`;
+        b.textContent = m.title;
         b.addEventListener("click", () => { $("memo").value = m.text; runMask(m.text); });
         $("demoButtons").appendChild(b);
       });

@@ -5,7 +5,7 @@
 > 이 앱은 해커톤 데모입니다. 제도 데이터와 샘플 메모는 모두 **가상**이며, 실제 자격 판정이나 실제 개인정보 처리를 하지 않습니다.
 
 - 제품 요구사항: [PRD.md](./PRD.md) · 기술 요구사항: [TRD.md](./TRD.md)
-- 배포 URL: https://cheongdo-care-pbs.azurewebsites.net (Azure App Service, Linux, Python 3.12, 일본 동부)
+- 팀 기록상 배포 주소: https://cheongdo-care-pbs.azurewebsites.net (Azure App Service, Linux, Python 3.12, 일본 동부). 최신 확인에서 `/api/health`가 HTTP 503을 반환해 현재 가용성은 미확인입니다.
 
 ## 시연 순서 (약 3분)
 
@@ -29,6 +29,7 @@ AI가 연결되지 않은 환경에서는 화면에 **“AI 미연결 · 규칙 
 ```
 
 - **단계 강제:** `/api/mask`가 마스킹 결과의 해시를 서명한 토큰을 반환하고, `/api/match`·`/api/draft`는 서명·만료·해시가 맞을 때만 모델을 호출합니다. 토큰에는 원문이나 개인정보가 들어가지 않습니다. 같은 방식으로 `/api/approve`는 초안 토큰을 요구합니다.
+- **모델 상태:** `/api/health`는 모델을 호출하지 않으며, 첫 요청 전에는 `not_checked`, 이후에는 최근 매칭·초안 요청의 성공 또는 대체 결과를 반환합니다. 이는 실시간 연결 확인이 아닙니다.
 - **에이전트:** 매칭 에이전트는 `lookup_schemes` 도구로 제도 목록을 조회하고, 출력의 제도 ID를 서버가 다시 검증해 데이터에 없는 제도를 제거합니다. CLI의 셸·파일 도구는 허용하지 않습니다.
 - **개인정보:** 모델에는 마스킹된 텍스트만 전달합니다. 서버는 원문과 모델 입출력을 저장하거나 로그에 남기지 않습니다.
 - **대체 경로:** 토큰 없음, 네트워크 오류, 시간 초과, 스키마 불일치 시 규칙 기반 결과를 반환하고 `is_fallback: true`로 표시합니다.
@@ -51,7 +52,7 @@ python -m uvicorn app.main:app --port 8000
 
 | 이름 | 설명 |
 | ---- | ---- |
-| `COPILOT_GITHUB_TOKEN` | GitHub Copilot SDK 인증 토큰. 없으면 규칙 기반 대체 결과가 표시됩니다. |
+| `COPILOT_GITHUB_TOKEN` | 선택적 GitHub Copilot SDK 인증 토큰. SDK는 저장된 Copilot CLI 로그인도 사용할 수 있으며, 사용 가능한 인증이 없으면 규칙 기반 대체 결과가 표시됩니다. |
 | `SIGNING_KEY` | 단계 토큰 서명 키. 미설정 시 서버 시작마다 임의 생성됩니다(인스턴스를 여러 개로 늘리면 설정 필요). |
 | `COPILOT_MODEL` | (선택) 사용할 모델 |
 | `COPILOT_CLI_EXTRACT_DIR` | (선택) Copilot 런타임 캐시 경로. 기본은 사용자 캐시 폴더이며 쓰기 가능해야 합니다. |
@@ -61,13 +62,13 @@ Copilot SDK의 런타임(약 120MB)은 Python 패키지에 포함되어 있지 �
 
 ## 배포 (Azure)
 
-Azure 기본 도메인(`*.azurewebsites.net`)에 App Service(Linux, Python 3.12)로 배포합니다. 현재 배포는 `az webapp up`으로 만들었고, 시작 명령은 다음과 같습니다.
+팀 기록상 Azure 기본 도메인(`*.azurewebsites.net`)의 App Service(Linux, Python 3.12)에 배포했으며, `az webapp up`과 다음 시작 명령을 사용했습니다.
 
 ```bash
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-앱 설정(환경 변수)으로 `COPILOT_GITHUB_TOKEN`, `SIGNING_KEY`, `WEBSITES_PORT=8000`, `COPILOT_CLI_EXTRACT_DIR=/home/copilot-cli`를 주입했고, `/api/health`가 HTTP 200을 반환하는지 확인합니다. Always On을 켜 두었습니다. Copilot 런타임은 시작할 때 `/home/copilot-cli`로 내려받으며(배포 환경에서 약 30초 소요 확인), 이후 호출은 같은 캐시를 사용합니다.
+팀 기록에는 앱 설정으로 `COPILOT_GITHUB_TOKEN`, `SIGNING_KEY`, `WEBSITES_PORT=8000`, `COPILOT_CLI_EXTRACT_DIR=/home/copilot-cli`를 주입하고 Always On을 켰다고 되어 있습니다. 또한 런타임이 시작 시 `/home/copilot-cli`로 내려받히며 약 30초가 걸렸다고 보고되어 있습니다. 이 설정과 동작은 현재 배포에서 독립적으로 확인되지 않았으며, 공개 `/api/health` 주소는 최신 확인에서 HTTP 503을 반환했습니다. 현재 배포 가용성은 미확인입니다.
 
 ## 알려진 한계
 
