@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -25,6 +26,12 @@ KST = timezone(timedelta(hours=9))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(title="청도 돌봄 도우미", docs_url=None, redoc_url=None)
+
+
+@app.on_event("startup")
+async def warm_up() -> None:
+    # 시작을 막지 않도록 백그라운드 스레드에서 실행한다.
+    asyncio.get_running_loop().run_in_executor(None, agents.warm_up_runtime)
 
 
 def _error(status: int, code: str, message: str) -> HTTPException:

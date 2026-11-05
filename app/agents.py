@@ -15,6 +15,9 @@ import re
 from typing import Any
 
 from .schemes import load_schemes, scheme_by_id
+from .settings import load_env
+
+load_env()
 
 logger = logging.getLogger("care.agents")
 
@@ -38,6 +41,19 @@ DRAFTING_INSTRUCTIONS = """당신은 복지 신청서 초안을 작성하는 에
 - 마스킹 표시자(예: [이름A])는 복원하지 말고 그대로 두세요.
 - 자격이 확정되었다고 쓰지 마세요.
 - 한국어 일반 텍스트로 초안만 출력하세요."""
+
+
+def warm_up_runtime() -> None:
+    """Copilot 런타임(약 120MB)은 첫 사용 때 내려받으므로, 시작 시 미리 받아 첫 요청 지연을 줄인다."""
+    try:
+        from copilot._cli_download import download_cli, get_cached_cli_path
+
+        if not get_cached_cli_path():
+            logger.info("Copilot 런타임 사전 다운로드 시작")
+            download_cli()
+            logger.info("Copilot 런타임 사전 다운로드 완료")
+    except Exception as exc:
+        logger.warning("Copilot 런타임 사전 다운로드 실패: %s", type(exc).__name__)
 
 
 def _extract_json(text: str) -> dict[str, Any]:

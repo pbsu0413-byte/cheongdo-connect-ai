@@ -47,14 +47,17 @@ python -m uvicorn app.main:app --port 8000
 
 ## 환경 변수
 
-`.env.example`을 참고하세요. 키와 토큰은 저장소에 두지 않고 환경 변수(앱 설정)로만 주입합니다.
+`.env.example`을 참고하세요. 로컬에서는 프로젝트 루트에 `.env` 파일을 만들면 자동으로 읽습니다(`.gitignore`로 제외되어 커밋되지 않음). 배포 환경에서는 앱 설정(환경 변수)으로만 주입합니다. 키와 토큰은 저장소에 두지 않습니다.
 
 | 이름 | 설명 |
 | ---- | ---- |
 | `COPILOT_GITHUB_TOKEN` | GitHub Copilot SDK 인증 토큰. 없으면 규칙 기반 대체 결과가 표시됩니다. |
 | `SIGNING_KEY` | 단계 토큰 서명 키. 미설정 시 서버 시작마다 임의 생성됩니다(인스턴스를 여러 개로 늘리면 설정 필요). |
 | `COPILOT_MODEL` | (선택) 사용할 모델 |
+| `COPILOT_CLI_EXTRACT_DIR` | (선택) Copilot 런타임 캐시 경로. 기본은 사용자 캐시 폴더이며 쓰기 가능해야 합니다. |
 | `AZURE_OPENAI_*` | (선택) BYOK: Azure OpenAI를 Copilot SDK의 모델 공급자로 사용 |
+
+Copilot SDK의 런타임(약 120MB)은 Python 패키지에 포함되어 있지 않고 **첫 사용 때 GitHub Releases에서 내려받아 캐시**됩니다. 앱은 시작할 때 백그라운드로 미리 내려받습니다. 배포 환경에서는 GitHub로 나가는 네트워크 접근과 쓰기 가능한 캐시 경로가 필요합니다.
 
 ## 배포 (Azure)
 
