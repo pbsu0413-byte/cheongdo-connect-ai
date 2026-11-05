@@ -22,16 +22,17 @@ AI가 연결되지 않은 환경에서는 화면에 **“AI 미연결 · 규칙 
 
 ```text
 브라우저(단일 페이지) → FastAPI (화면과 API를 한 서비스로 제공)
-   /api/mask → /api/match → /api/draft → /api/approve
-        │          │            │
-   MaskingTool   MatchingAgent  DraftingAgent
+   /api/mask → /api/match → /api/draft(/stream) → /api/review → /api/approve
+        │          │              │                  │
+   MaskingTool   MatchingAgent  DraftingAgent     ReviewAgent
    (규칙 기반)   └── Microsoft Agent Framework GitHubCopilotAgent ──▶ GitHub Copilot SDK
 ```
 
-- **단계 강제:** `/api/mask`가 마스킹 결과의 해시를 서명한 토큰을 반환하고, `/api/match`·`/api/draft`는 서명·만료·해시가 맞을 때만 모델을 호출합니다. 토큰에는 원문이나 개인정보가 들어가지 않습니다. 같은 방식으로 `/api/approve`는 초안 토큰을 요구합니다.
-- **에이전트:** 매칭 에이전트는 `lookup_schemes` 도구로 제도 목록을 조회하고, 출력의 제도 ID를 서버가 다시 검증해 데이터에 없는 제도를 제거합니다. CLI의 셸·파일 도구는 허용하지 않습니다.
+- **단계 강제:** `/api/mask`가 마스킹 결과의 해시를 서명한 토큰을 반환하고, `/api/match`·`/api/draft`·`/api/review`는 서명·만료·해시가 맞을 때만 모델을 호출합니다. 토큰에는 원문이나 개인정보가 들어가지 않습니다. 같은 방식으로 `/api/approve`는 초안 토큰을 요구합니다.
+- **에이전트 3개:** 매칭 에이전트는 `lookup_schemes` 도구로 제도 목록을 조회하고(도구 호출), 초안 에이전트는 초안을 **스트리밍**으로 보내며, 검토 에이전트는 초안을 메모·제도 항목과 대조해 근거 없는 단정과 자격 확정 표현을 점검합니다. 각 에이전트는 시스템 지시와 메모를 분리해 전달하고(컨텍스트 처리), 출력은 서버가 다시 검증합니다. CLI의 셸·파일 도구는 허용하지 않고 `lookup_schemes`만 승인합니다.
 - **개인정보:** 모델에는 마스킹된 텍스트만 전달합니다. 서버는 원문과 모델 입출력을 저장하거나 로그에 남기지 않습니다.
-- **대체 경로:** 토큰 없음, 네트워크 오류, 시간 초과, 스키마 불일치 시 규칙 기반 결과를 반환하고 `is_fallback: true`로 표시합니다.
+- **대체 경로:** 토큰 없음, 네트워크 오류, 시간 초과, 스키마 불일치 시 규칙 기반 결과를 반환하고 `is_fallback: true`로 표시합니다. 이 결과에는 AI 생성 표시가 붙지 않습니다.
+- **처리 시간 표시:** 후보와 초안 화면에 서버가 측정한 처리 시간이 표시됩니다. 대기 중에는 경과 시간과 현재 단계가 보입니다.
 
 ## 로컬 실행
 
@@ -61,7 +62,14 @@ Copilot SDK의 런타임(약 120MB)은 Python 패키지에 포함되어 있지 �
 
 ## 배포 (Azure)
 
-Azure 기본 도메인(`*.azurewebsites.net`)에 App Service(Linux, Python 3.12)로 배포합니다. 현재 배포는 `az webapp up`으로 만들었고, 시작 명령은 다음과 같습니다.
+`infra/deploy.ps1`로 반복 배포할 수 있습니다(리소스 그룹, App Service 계획, 웹앱, 앱 설정, 코드 배포, 헬스체크까지). 사전 조건은 Azure CLI 설치와 `az login`이며, `COPILOT_GITHUB_TOKEN` 환경 변수가 있으면 앱 설정으로 주입합니다(값은 출력하지 않음).
+
+```powershell
+$env:COPILOT_GITHUB_TOKEN = "<Copilot 권한이 있는 토큰>"   # 선택
+.\infra\deploy.ps1 -Name <앱이름> -Location japaneast
+```
+
+Azure 기본 도메인(`*.azurewebsites.net`)에 App Service(Linux, Python 3.12)로 배포합니다. 시작 명령은 다음과 같습니다.
 
 ```bash
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000

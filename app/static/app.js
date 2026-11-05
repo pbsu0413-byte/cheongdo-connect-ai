@@ -84,8 +84,23 @@
       list.push('<span class="badge ai">AI 생성</span>');
       list.push(`<span class="badge">${escapeHtml(data.engine)}</span>`);
     }
+    if (data.elapsed_ms) list.push(`<span class="badge">처리 시간 ${(data.elapsed_ms / 1000).toFixed(1)}초</span>`);
     list.push('<span class="badge">시연용 가상 데이터 · 자격 판정 아님</span>');
     target.innerHTML = list.join("");
+  }
+
+  // 대기 중에 경과 시간과 현재 단계를 보여 준다.
+  function startProgress(message) {
+    const el = $("progress");
+    const started = Date.now();
+    const render = () => { el.textContent = `${message} (${Math.floor((Date.now() - started) / 1000)}초)`; };
+    render();
+    el.hidden = false;
+    const timer = setInterval(render, 500);
+    return {
+      set(text) { message = text; render(); },
+      stop() { clearInterval(timer); el.hidden = true; },
+    };
   }
 
   async function runMatch() {
@@ -93,6 +108,7 @@
     const btn = $("confirmBtn");
     setBusy(btn, true, "후보 찾는 중…");
     announce("제도 후보를 찾고 있습니다.");
+    const progress = startProgress("Copilot 에이전트가 제도 목록 도구를 조회하며 후보를 찾는 중입니다");
     try {
       const data = await api("/api/match", { masked_text: state.masked, mask_token: state.maskToken });
       badges($("matchBadges"), data);
@@ -119,7 +135,34 @@
     } catch (e) {
       showError(e.message, runMatch);
     } finally {
+      progress.stop();
       setBusy(btn, false);
+    }
+  }
+
+  function parseSse(block) {
+    let event = "message";
+    const dataLines = [];
+    block.split("\n").forEach((line) => {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+    });
+    return { event, data: dataLines.length ? JSON.parse(dataLines.join("\n")) : {} };
+  }
+
+  async function runReview() {
+    const box = $("review");
+    box.hidden = false;
+    box.innerHTML = "<h3>검토 에이전트 점검</h3><p>초안을 메모와 대조해 점검하는 중입니다…</p>";
+    try {
+      const data = await api("/api/review", { masked_text: state.masked, mask_token: state.maskToken, scheme_id: state.schemeId, draft_text: $("draft").value });
+      const label = data.is_fallback ? "규칙 기반 점검 (AI 미연결)" : "AI 점검 · " + escapeHtml(data.engine);
+      const body = data.issues.length
+        ? "<ul>" + data.issues.map((i) => `<li>${escapeHtml(i.text)}${i.quote ? ` <span class="quote">“${escapeHtml(i.quote)}”</span>` : ""}</li>`).join("") + "</ul>"
+        : "<p>점검에서 문제를 찾지 못했습니다. 그래도 승인 전에 담당자가 직접 확인해 주세요.</p>";
+      box.innerHTML = `<h3>검토 에이전트 점검 <span class="badge ${data.is_fallback ? "fallback" : "ai"}">${label}</span></h3>${body}`;
+    } catch (e) {
+      box.innerHTML = "<h3>검토 에이전트 점검</h3><p>점검을 건너뛰었습니다. 담당자가 직접 확인해 주세요.</p>";
     }
   }
 
@@ -127,17 +170,61 @@
     hideError();
     setBusy(button, true, "초안 작성 중…");
     announce("신청서 초안을 작성하고 있습니다.");
+    const draft = $("draft");
+    draft.value = "";
+    draft.readOnly = true;
+    $("review").hidden = true;
+    $("draftBadges").innerHTML = "";
+    $("approveBtn").disabled = true;
+    state.schemeId = schemeId;
+    state.draftToken = "";
+    const progress = startProgress("Copilot 에이전트에 마스킹된 메모를 전달해 초안을 작성하는 중입니다");
+    goto(4);
     try {
-      const data = await api("/api/draft", { masked_text: state.masked, mask_token: state.maskToken, scheme_id: schemeId });
-      state.schemeId = schemeId;
-      state.draftToken = data.draft_token;
-      badges($("draftBadges"), data);
-      $("draft").value = data.draft;
-      goto(4);
+      const response = await fetch("/api/draft/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ masked_text: state.masked, mask_token: state.maskToken, scheme_id: schemeId }),
+      });
+      if (!response.ok) {
+        let message = "일시적인 문제가 발생했습니다. 다시 시도해 주세요.";
+        try { message = (await response.json()).error.message; } catch (e) { /* 본문 없음 */ }
+        throw new Error(message);
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finished = false;
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let index;
+        while ((index = buffer.indexOf("\n\n")) >= 0) {
+          const { event, data } = parseSse(buffer.slice(0, index));
+          buffer = buffer.slice(index + 2);
+          if (event === "status") progress.set(data.message);
+          else if (event === "delta") { draft.value += data.text; draft.scrollTop = draft.scrollHeight; progress.set("초안을 작성하는 중입니다"); }
+          else if (event === "reset") draft.value = "";
+          else if (event === "done") {
+            finished = true;
+            draft.value = data.draft;
+            state.draftToken = data.draft_token;
+            badges($("draftBadges"), data);
+          }
+        }
+      }
+      if (!finished) throw new Error("초안 작성이 중단되었습니다.");
+      draft.readOnly = false;
+      $("approveBtn").disabled = false;
       announce("초안이 표시되었습니다. 검토 후 승인해 주세요.");
+      runReview();
     } catch (e) {
+      goto(3);
       showError(e.message, () => runDraft(schemeId, button));
     } finally {
+      progress.stop();
+      draft.readOnly = false;
       setBusy(button, false);
     }
   }

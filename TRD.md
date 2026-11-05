@@ -99,16 +99,32 @@
 - Acceptance: 샘플이 3개 이상이고 화면에서 선택할 수 있다.
 - Verification: 화면 확인.
 
+### TR-F-006: 초안 스트리밍
+
+- Source: FR-004
+- Requirement: 서버는 초안을 Server-Sent Events로 흘려 보내야 한다(`POST /api/draft/stream`). 이벤트는 `status`, `delta`, `reset`, `done`이며, `done`에 완성 초안, `is_fallback`, `ai_generated`, 경과 시간, 초안 토큰을 담아야 한다. 스트리밍 도중 모델 호출이 실패하면 `reset` 후 대체 초안으로 `done`을 보내야 한다. 이 엔드포인트도 TR-F-003의 서명 토큰 검증을 거쳐야 한다.
+- Acceptance: 모델 조각이 `delta`로 전달되고 `done`에서 합쳐진 초안이 일치한다. 토큰이 없으면 거부된다.
+- Verification: 자동 시험(`tests/test_stream_review.py`), 배포 URL 호출.
+
+### TR-F-007: 검토 에이전트
+
+- Source: FR-007
+- Requirement: 서버는 `POST /api/review`로 초안 점검 결과를 반환해야 한다. 검토 에이전트는 마스킹된 메모, 제도 항목, 초안만 입력으로 사용하고, 메모에 없는 사실의 단정과 자격 확정 표현을 `issues`(문제 설명과 초안 인용)로 반환해야 한다. 이 엔드포인트도 TR-F-003의 서명 토큰 검증을 거쳐야 한다. 모델 호출이 실패하면 규칙 기반 점검으로 대체하고 `is_fallback: true`를 표시해야 한다.
+- Acceptance: 자격 확정 표현이 있는 초안에서 규칙 기반 점검이 이를 찾는다. 모델 응답의 문제 목록이 그대로 반환된다.
+- Verification: 자동 시험, 배포 URL 호출.
+
 ### TR-I-001: API 목록
 
-- Source: FR-001~FR-006
-- Requirement: 서버는 다음 API를 제공해야 한다. 요청·응답은 JSON이고 오류 형식은 통일한다.
+- Source: FR-001~FR-007
+- Requirement: 서버는 다음 API를 제공해야 한다. 요청·응답은 JSON(스트리밍 제외)이고 오류 형식은 통일한다.
 
 | 메서드와 경로 | 설명 |
 | ------------- | ---- |
 | `POST /api/mask` | 마스킹 결과와 치환 개수 반환, 모델 호출 없음 |
 | `POST /api/match` | 확인 표시가 있을 때 후보 반환 |
 | `POST /api/draft` | 선택한 제도의 초안 반환 |
+| `POST /api/draft/stream` | 초안을 SSE로 스트리밍 |
+| `POST /api/review` | 초안 점검 결과 반환 |
 | `POST /api/approve` | 상태를 `approved`로 변경 |
 | `GET /api/health` | HTTP 200과 상태 반환 |
 
@@ -157,6 +173,13 @@
 - Acceptance: 모델 호출을 실패시켜도 후보와 초안이 대체 결과로 표시되고 AI 생성 표시가 붙지 않는다.
 - Verification: 실패 주입 시험, 배포 URL 호출.
 
+### TR-O-002: 반복 가능한 배포와 운영 설정
+
+- Source: NFR-007, CD-002, CD-004
+- Requirement: 배포는 저장소의 `infra/deploy.ps1`로 반복 실행할 수 있어야 한다(리소스 그룹, App Service 계획, 웹앱, 앱 설정, 코드 배포). 앱은 HTTPS만 허용하고, TLS 1.2 이상, FTP 비활성, Always On, 헬스체크 경로 `/api/health`를 설정해야 한다. 비밀은 앱 설정으로만 주입하고 스크립트는 값을 출력하지 않아야 한다.
+- Acceptance: 스크립트를 다시 실행해도 같은 URL에서 `/api/health`가 200을 반환한다.
+- Verification: 스크립트 실행, 앱 설정 조회.
+
 ## 5. Verification, acceptance, and traceability
 
 ### Product-to-technical coverage
@@ -166,15 +189,16 @@
 | FR-001 | TR-F-001, TR-D-002 | Covered |
 | FR-002 | TR-F-002, TR-F-003 | Covered |
 | FR-003 | TR-F-004, TR-D-001, TR-Q-003 | Covered |
-| FR-004, FR-005 | TR-F-005 | Covered |
+| FR-004, FR-005 | TR-F-005, TR-F-006 | Covered |
 | FR-006 | TR-O-001 | Covered |
-| NFR-001 | CD-001, TR-F-004, TR-F-005 | Covered: 로컬과 Azure에서 Copilot SDK 호출 성공 확인, 토큰 허용 범위는 Q-003 |
+| FR-007 | TR-F-007 | Covered |
+| NFR-001 | CD-001, TR-F-004, TR-F-005, TR-F-006, TR-F-007 | Covered: 로컬과 Azure에서 Copilot SDK 호출 성공 확인, 토큰 허용 범위는 Q-003 |
 | NFR-002 | TR-F-002, TR-Q-001 | Covered |
 | NFR-003 | TR-Q-002 | Covered |
 | NFR-004 | TR-Q-004 | Covered |
 | NFR-005 | TR-Q-005 | Covered |
 | NFR-006 | CD-003 | Covered |
-| NFR-007 | CD-002, TR-O-001 | Covered |
+| NFR-007 | CD-002, TR-O-001, TR-O-002 | Covered |
 
 ### Release gates
 

@@ -31,6 +31,7 @@
   <main id="main">
     <div id="error" class="error" role="alert" hidden></div>
     <div id="status" class="sr-only" aria-live="polite"></div>
+    <p id="progress" class="progress" hidden></p>
 
     <section id="step1" class="card" aria-labelledby="h1">
       <h2 id="h1">1. 상담 메모 입력</h2>
@@ -73,6 +74,7 @@
       <p id="draftBadges" class="badges"></p>
       <label for="draft">초안 (직접 수정할 수 있습니다)</label>
       <textarea id="draft" rows="12"></textarea>
+      <div id="review" class="review" hidden aria-live="polite"></div>
       <p class="hint">담당자가 검토하기 전에는 확정되지 않습니다.</p>
       <div class="row">
         <button id="backToCandidates">후보로 돌아가기</button>

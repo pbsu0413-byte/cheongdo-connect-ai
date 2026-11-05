@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -25,13 +27,14 @@ DISCLAIMER = "시연용 가상 데이터입니다. 실제 자격 판정이 아�
 KST = timezone(timedelta(hours=9))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-app = FastAPI(title="청도 돌봄 도우미", docs_url=None, redoc_url=None)
-
-
-@app.on_event("startup")
-async def warm_up() -> None:
-    # 시작을 막지 않도록 백그라운드 스레드에서 실행한다.
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # 시작을 막지 않도록 백그라운드 스레드에서 Copilot 런타임을 미리 내려받는다.
     asyncio.get_running_loop().run_in_executor(None, agents.warm_up_runtime)
+    yield
+
+
+app = FastAPI(title="청도 돌봄 도우미", docs_url=None, redoc_url=None, lifespan=lifespan)
 
 
 def _error(status: int, code: str, message: str) -> HTTPException:
@@ -63,6 +66,13 @@ class ApproveRequest(BaseModel):
     draft_text: str = Field(default="")
     scheme_id: str = Field(default="")
     draft_token: str = Field(default="")
+
+
+class ReviewRequest(BaseModel):
+    masked_text: str = Field(default="")
+    mask_token: str = Field(default="")
+    scheme_id: str = Field(default="")
+    draft_text: str = Field(default="")
 
 
 def _require_confirmed(masked_text: str, mask_token: str) -> None:
@@ -110,6 +120,58 @@ async def match(request: MatchRequest) -> dict:
     started = time.monotonic()
     result = await agents.match_schemes(request.masked_text)
     logger.info("match done fallback=%s candidates=%d ms=%d", result["is_fallback"], len(result["candidates"]), (time.monotonic() - started) * 1000)
+    return {
+        **result,
+        "ai_generated": not result["is_fallback"],
+        "elapsed_ms": int((time.monotonic() - started) * 1000),
+        "disclaimer": DISCLAIMER,
+    }
+
+
+def _sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@app.post("/api/draft/stream")
+async def draft_stream(request: DraftRequest) -> StreamingResponse:
+    _require_confirmed(request.masked_text, request.mask_token)
+    if request.scheme_id not in scheme_by_id():
+        raise _error(400, "unknown_scheme", "존재하지 않는 제도입니다. 후보 목록에서 선택해 주세요.")
+
+    async def events():
+        started = time.monotonic()
+        yield _sse("status", {"message": "마스킹된 메모와 제도 항목을 Copilot 에이전트에 전달했습니다."})
+        async for item in agents.stream_draft(request.masked_text, request.scheme_id):
+            if item["type"] == "delta":
+                yield _sse("delta", {"text": item["text"]})
+            elif item["type"] == "reset":
+                yield _sse("reset", {})
+            else:
+                payload = {
+                    "draft": item["draft"],
+                    "is_fallback": item["is_fallback"],
+                    "engine": item["engine"],
+                    "scheme_id": request.scheme_id,
+                    "ai_generated": not item["is_fallback"],
+                    "status": "draft",
+                    "draft_token": gate.issue_token("draft", request.scheme_id),
+                    "elapsed_ms": int((time.monotonic() - started) * 1000),
+                    "disclaimer": DISCLAIMER,
+                }
+                logger.info("draft stream done fallback=%s ms=%d", item["is_fallback"], payload["elapsed_ms"])
+                yield _sse("done", payload)
+
+    return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.post("/api/review")
+async def review(request: ReviewRequest) -> dict:
+    _require_confirmed(request.masked_text, request.mask_token)
+    if request.scheme_id not in scheme_by_id():
+        raise _error(400, "unknown_scheme", "존재하지 않는 제도입니다.")
+    if not request.draft_text.strip() or len(request.draft_text) > MAX_MEMO_CHARS * 2:
+        raise _error(400, "invalid_draft", "점검할 초안이 없거나 너무 깁니다.")
+    result = await agents.review_draft(request.masked_text, request.scheme_id, request.draft_text)
     return {**result, "ai_generated": not result["is_fallback"], "disclaimer": DISCLAIMER}
 
 
