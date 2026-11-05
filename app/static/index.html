@@ -40,7 +40,10 @@
   <main id="main">
     <div id="error" class="error" role="alert" hidden></div>
     <div id="status" class="sr-only" aria-live="polite"></div>
-    <p id="progress" class="progress" hidden></p>
+    <div id="progress" class="progress" hidden>
+      <p id="progressText"></p>
+      <p class="progress__note">모델 응답에 약 20초가 걸릴 수 있습니다.</p>
+    </div>
 
     <section id="step1" class="panel" aria-labelledby="h1">
       <div class="panel__heading">
@@ -77,6 +80,7 @@
       <p id="counts" class="counts"></p>
       <p id="warnings" class="warn"></p>
       <p id="limits" class="hint"></p>
+      <p class="hint">마스킹된 메모가 GitHub Copilot 모델로 전송됩니다. 서버는 원문과 모델 입출력을 저장하지 않습니다.</p>
       <div class="row">
         <button id="backBtn">다시 입력</button>
         <button id="confirmBtn" class="primary">확인하고 진행</button>

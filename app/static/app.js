@@ -2,7 +2,7 @@
   const $ = (id) => document.getElementById(id);
   const KIND_LABELS = { name: "이름", phone: "전화", rrn: "주민번호", address: "주소", email: "이메일", account: "계좌", date: "날짜" };
   const MODEL_STATUS_LABELS = {
-    not_checked: "모델 연결 여부 확인 전",
+    not_checked: "첫 요청 후 표시됩니다",
     last_call_success: "최근 모델 호출 성공",
     last_call_failed: "최근 처리 대체됨, 규칙 기반 결과",
   };
@@ -124,8 +124,9 @@
   // 대기 중에 경과 시간과 현재 단계를 보여 준다.
   function startProgress(message) {
     const el = $("progress");
+    const text = $("progressText");
     const started = Date.now();
-    const render = () => { el.textContent = `${message} (${Math.floor((Date.now() - started) / 1000)}초)`; };
+    const render = () => { text.textContent = `${message} (${Math.floor((Date.now() - started) / 1000)}초)`; };
     render();
     el.hidden = false;
     const timer = setInterval(render, 500);
