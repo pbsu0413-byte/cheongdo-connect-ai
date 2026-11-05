@@ -102,6 +102,16 @@ def _provider_options() -> dict[str, Any]:
     }
 
 
+def _allow_only_lookup_tool(request: Any, _context: Any) -> Any:
+    """사용자 정의 도구 lookup_schemes만 승인하고 셸·파일·메모리 등 나머지 권한 요청은 모두 거부한다."""
+    from copilot.generated.rpc import PermissionDecisionApproveOnce, PermissionDecisionUserNotAvailable
+    from copilot.session_events import PermissionRequestCustomTool
+
+    if isinstance(request, PermissionRequestCustomTool) and request.tool_name == "lookup_schemes":
+        return PermissionDecisionApproveOnce()
+    return PermissionDecisionUserNotAvailable()
+
+
 async def _run_agent(instructions: str, prompt: str, use_lookup_tool: bool) -> str:
     # 지연 임포트: 모델 의존성이 없어도 앱의 나머지 부분은 동작한다.
     from agent_framework import tool
@@ -122,6 +132,7 @@ async def _run_agent(instructions: str, prompt: str, use_lookup_tool: bool) -> s
         options["model"] = model
     # 사용자 정의 도구만 허용해 CLI의 셸·파일 도구를 쓰지 못하게 한다.
     options["available_tools"] = [t.name for t in tools]
+    options["on_permission_request"] = _allow_only_lookup_tool
 
     agent = GitHubCopilotAgent(instructions=instructions, tools=tools or None, default_options=options)
     async with agent:
